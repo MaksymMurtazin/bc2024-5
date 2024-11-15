@@ -2,6 +2,7 @@ const { Command } = require('commander');
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
 
 const program = new Command();
 program
@@ -23,6 +24,7 @@ if (!host || !port || !cache) {
 
 const app = express();
 app.use(express.json());
+const upload = multer();
 
 const cacheDir = path.resolve(options.cache);
 if (!fs.existsSync(cacheDir)) {
@@ -31,6 +33,7 @@ if (!fs.existsSync(cacheDir)) {
 
 
 const getNotePath = (noteName) => path.join(cacheDir, `${noteName}.txt`);
+
 
 app.get('/notes/:name', (req, res) => {
     const notePath = getNotePath(req.params.name);
@@ -69,28 +72,34 @@ app.get('/notes', (req, res) => {
         const noteText = fs.readFileSync(getNotePath(noteName), 'utf-8');
         return { name: noteName, text: noteText };
     });
-    res.json(notes);
+    res.status(200).json(notes);
 });
 
 
-app.post('/write', (req, res) => {
+app.post('/write', upload.none(), (req, res) => {
     const { note_name, note } = req.body;
-    const notePath = getNotePath(note_name);
+    const notePath = path.join(cacheDir, `${note_name}.txt`);
+
     if (fs.existsSync(notePath)) {
         return res.status(400).send('Note already exists');
     }
-    fs.writeFileSync(notePath, note || '');
-    res.status(201).send('Note created');
+    fs.writeFile(notePath, note, (err) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).send('Internal Server Error');
+        }
+        res.status(201).send('Created');
+    });
 });
 
 
 app.get('/UploadForm.html', (req, res) => {
-    const formPath = path.join(cacheDir, 'UploadForm.html');
+    const uploadFormPath = path.join(__dirname, 'UploadForm.html');
 
-    if (fs.existsSync(formPath)) {
-        res.sendFile(formPath);
+    if (fs.existsSync(uploadFormPath)) {
+        res.sendFile(uploadFormPath);
     } else {
-        res.status(404).send('UploadForm.html not found in cache directory');
+        res.status(404).send('Upload form not found');
     }
 });
 
